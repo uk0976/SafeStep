@@ -83,14 +83,8 @@ export async function extendEta(id, minutes = 10) {
   await updateDoc(doc(db, COLLECTION, id), { etaMinutes: increment(minutes) })
 }
 
-// Ensures a fixed demo journey exists so the deployed link is never empty for a
-// judge landing cold. Safe to call on every app load — no-ops if it already exists.
-export async function ensureDemoJourney() {
-  const ref = doc(db, COLLECTION, DEMO_JOURNEY_ID)
-  const snap = await getDoc(ref)
-  if (snap.exists()) return
-
-  await setDoc(ref, {
+function demoJourneyData() {
+  return {
     name: 'Aisha',
     destination: 'Home, Andheri Station',
     etaMinutes: 20,
@@ -99,6 +93,28 @@ export async function ensureDemoJourney() {
     status: 'on_the_way',
     startedAt: serverTimestamp(),
     lastCheckIn: serverTimestamp(),
+    concernReason: '',
     lastLocation: { lat: 19.1197, lng: 72.8468, accuracy: 25, capturedAt: Date.now() },
-  })
+  }
+}
+
+// Ensures the demo journey exists AND is still mid-flight, so a judge landing
+// cold always sees the live, active tracking UI — never a stale overdue/safe
+// state left over from someone else's earlier test. Safe to call on every app
+// load: no-ops if the existing demo is still "on the way" and within its ETA.
+export async function ensureDemoJourney() {
+  const ref = doc(db, COLLECTION, DEMO_JOURNEY_ID)
+  const snap = await getDoc(ref)
+
+  if (snap.exists()) {
+    const data = snap.data()
+    const startedAtMs = data.startedAt?.toMillis?.() ?? null
+    const stillFresh =
+      data.status === 'on_the_way' &&
+      startedAtMs !== null &&
+      Date.now() < startedAtMs + data.etaMinutes * 60000
+    if (stillFresh) return
+  }
+
+  await setDoc(ref, demoJourneyData())
 }

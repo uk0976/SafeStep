@@ -254,7 +254,7 @@ export default function TrackJourney() {
           )}
           {journey.status === 'overdue' && (
             <div className="status-banner overdue">
-              ⚠ {journey.name} hasn't checked in past their expected arrival time.
+              ⚠ {journey.name} hasn't checked in past their expected arrival time.{' '}
               {journey.contactName} has been notified.
             </div>
           )}
