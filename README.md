@@ -25,8 +25,11 @@ point during the trip. Both events are designed to notify your contact immediate
 
 - **Start a journey in under 15 seconds** — name, destination, ETA, and one contact, no account
 - **Live shareable tracking link** (`/track/:id`) — updates in real time via Firestore, viewable by anyone with the link
+- **One-tap share** — native share sheet (WhatsApp, SMS, etc.) where supported, clipboard copy fallback everywhere else
 - **Automatic overdue detection** — a client-side countdown flips the journey to `overdue` the moment the ETA passes without the traveler marking themselves safe
+- **"Running late? +10 min"** — extends the ETA without ending the journey, so real-world delays (traffic, signal) don't trigger a false alarm
 - **Check In / Arrived Safely / SOS** controls, visible only while the journey is active
+- **Best-effort last-known location** — captured on journey start and check-in via the browser Geolocation API; shown to the contact as a "View on map" link when available
 - **Color-coded status at a glance** — on the way (blue), safe (green), overdue (amber), SOS (red, pulsing)
 - **Demo journey pre-seeded on first load** (`/track/demo-journey`) so the concept is visible immediately, with no setup
 
@@ -65,8 +68,9 @@ transition. A production version would move this check to a scheduled Cloud Func
 src/
   firebase.js          # Firebase app + Firestore init (reads VITE_FIREBASE_* env vars)
   lib/
-    journeys.js         # Firestore CRUD: create, subscribe, check-in, safe, SOS, overdue, demo-seed
+    journeys.js         # Firestore CRUD: create, subscribe, check-in, safe, SOS, overdue, extendEta, demo-seed
     alerts.js            # EmailJS alert sender, degrades to console log if unconfigured
+    location.js           # Best-effort single-point geolocation capture (never blocks the flow)
   components/
     StatusBadge.jsx      # Color-coded status pill (on_the_way/safe/overdue/sos)
   pages/
@@ -101,9 +105,10 @@ fill in `VITE_EMAILJS_SERVICE_ID`, `VITE_EMAILJS_TEMPLATE_ID`, and
 ## What's mocked vs real
 
 - **Real:** journey creation, real-time status sync via Firestore, countdown-based
-  overdue detection, SOS trigger, shareable links, demo-journey auto-seed
+  overdue detection, ETA extension, SOS trigger, shareable links (native share + clipboard),
+  best-effort last-known-location capture and map link, demo-journey auto-seed
 - **Mocked/out of scope for this MVP:**
-  - **GPS/live location** — not implemented; the countdown is time-based (ETA vs. now), not position-based. A real location trail is the natural next step.
+  - **Continuous live GPS tracking** — not implemented; location is a single best-effort snapshot captured at journey start and on each check-in, not a moving trail. A real-time location trail (e.g. via `watchPosition`) is the natural next step.
   - **User accounts** — intentionally omitted; each journey is addressable by its own unguessable link instead, to keep the flow frictionless
   - **SMS alerts** — EmailJS stands in for a real SMS/push notification provider (e.g. Twilio) that would be used in production
   - **Native mobile app** — this is a responsive web app; a PWA wrapper or native app is a natural next step for background location and push notifications
