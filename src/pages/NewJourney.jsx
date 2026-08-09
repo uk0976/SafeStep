@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { createJourney } from '../lib/journeys'
+import { captureLocation } from '../lib/location'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -40,12 +41,14 @@ export default function NewJourney() {
 
     setSubmitting(true)
     try {
+      const location = await captureLocation()
       const id = await createJourney({
         name: form.name.trim(),
         destination: form.destination.trim(),
         etaMinutes: eta,
         contactName: form.contactName.trim(),
         contactEmail: form.contactEmail.trim(),
+        location,
       })
       navigate(`/track/${id}`)
     } catch (err) {

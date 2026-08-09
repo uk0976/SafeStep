@@ -6,8 +6,10 @@ import {
   markSafe,
   markSOS,
   markOverdue,
+  extendEta,
 } from '../lib/journeys'
 import { sendAlertEmail } from '../lib/alerts'
+import { captureLocation, mapUrl } from '../lib/location'
 import StatusBadge from '../components/StatusBadge'
 
 function toDate(ts) {
@@ -32,6 +34,7 @@ export default function TrackJourney() {
   const [journey, setJourney] = useState(undefined) // undefined = loading, null = not found
   const [now, setNow] = useState(Date.now())
   const [actionPending, setActionPending] = useState(false)
+  const [shareState, setShareState] = useState('idle') // idle | copied
   const overdueAlertSent = useRef(false)
 
   useEffect(() => {
@@ -70,7 +73,8 @@ export default function TrackJourney() {
   async function handleCheckIn() {
     setActionPending(true)
     try {
-      await checkIn(id)
+      const location = await captureLocation()
+      await checkIn(id, location)
     } finally {
       setActionPending(false)
     }
@@ -88,10 +92,44 @@ export default function TrackJourney() {
   async function handleSOS() {
     setActionPending(true)
     try {
-      await markSOS(id)
+      const location = await captureLocation()
+      await markSOS(id, location)
       if (journey) await sendAlertEmail(journey, 'sos')
     } finally {
       setActionPending(false)
+    }
+  }
+
+  async function handleExtend() {
+    setActionPending(true)
+    try {
+      await extendEta(id, 10)
+    } finally {
+      setActionPending(false)
+    }
+  }
+
+  async function handleShare() {
+    const url = window.location.href
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `SafeStep — ${journey.name}'s journey`,
+          text: `Track ${journey.name}'s journey to ${journey.destination} live.`,
+          url,
+        })
+        return
+      } catch (err) {
+        if (err?.name === 'AbortError') return
+        // fall through to clipboard fallback
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(url)
+      setShareState('copied')
+      setTimeout(() => setShareState('idle'), 2000)
+    } catch (err) {
+      console.error('[SafeStep] Failed to copy link', err)
     }
   }
 
@@ -145,6 +183,9 @@ export default function TrackJourney() {
               <div className="countdown-label">
                 {remainingMs > 0 ? 'Expected to arrive in' : 'Expected arrival time passed'}
               </div>
+              <button className="text-btn" onClick={handleExtend} disabled={actionPending}>
+                Running late? +10 min
+              </button>
             </div>
           )}
 
@@ -161,6 +202,19 @@ export default function TrackJourney() {
               <span className="label">Started at</span>
               <span className="value">{formatTime(startedAt)}</span>
             </div>
+            {journey.lastLocation && (
+              <div className="info-row">
+                <span className="label">Last known location</span>
+                <a
+                  className="value map-link"
+                  href={mapUrl(journey.lastLocation)}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  View on map ↗
+                </a>
+              </div>
+            )}
           </div>
 
           {journey.status === 'safe' && (
@@ -192,6 +246,12 @@ export default function TrackJourney() {
               </button>
             </div>
           )}
+
+          <div className="action-row">
+            <button className="btn btn-ghost" onClick={handleShare}>
+              {shareState === 'copied' ? '✓ Link copied' : '🔗 Share Tracking Link'}
+            </button>
+          </div>
         </div>
 
         <div className="footer-hint">

@@ -7,13 +7,21 @@ import {
   updateDoc,
   onSnapshot,
   serverTimestamp,
+  increment,
 } from 'firebase/firestore'
 import { db } from '../firebase'
 
 const COLLECTION = 'journeys'
 export const DEMO_JOURNEY_ID = 'demo-journey'
 
-export async function createJourney({ name, destination, etaMinutes, contactName, contactEmail }) {
+export async function createJourney({
+  name,
+  destination,
+  etaMinutes,
+  contactName,
+  contactEmail,
+  location,
+}) {
   const ref = await addDoc(collection(db, COLLECTION), {
     name,
     destination,
@@ -23,6 +31,7 @@ export async function createJourney({ name, destination, etaMinutes, contactName
     status: 'on_the_way',
     startedAt: serverTimestamp(),
     lastCheckIn: serverTimestamp(),
+    lastLocation: location ?? null,
   })
   return ref.id
 }
@@ -36,20 +45,32 @@ export function subscribeToJourney(id, onChange, onError) {
   )
 }
 
-export async function checkIn(id) {
-  await updateDoc(doc(db, COLLECTION, id), { lastCheckIn: serverTimestamp() })
+export async function checkIn(id, location) {
+  await updateDoc(doc(db, COLLECTION, id), {
+    lastCheckIn: serverTimestamp(),
+    ...(location ? { lastLocation: location } : {}),
+  })
 }
 
 export async function markSafe(id) {
   await updateDoc(doc(db, COLLECTION, id), { status: 'safe' })
 }
 
-export async function markSOS(id) {
-  await updateDoc(doc(db, COLLECTION, id), { status: 'sos' })
+export async function markSOS(id, location) {
+  await updateDoc(doc(db, COLLECTION, id), {
+    status: 'sos',
+    ...(location ? { lastLocation: location } : {}),
+  })
 }
 
 export async function markOverdue(id) {
   await updateDoc(doc(db, COLLECTION, id), { status: 'overdue' })
+}
+
+// Pushes the ETA out by `minutes` (default 10) — lets a traveler running late
+// avoid a false overdue alarm without ending the journey.
+export async function extendEta(id, minutes = 10) {
+  await updateDoc(doc(db, COLLECTION, id), { etaMinutes: increment(minutes) })
 }
 
 // Ensures a fixed demo journey exists so the deployed link is never empty for a
@@ -68,5 +89,6 @@ export async function ensureDemoJourney() {
     status: 'on_the_way',
     startedAt: serverTimestamp(),
     lastCheckIn: serverTimestamp(),
+    lastLocation: { lat: 19.1197, lng: 72.8468, accuracy: 25, capturedAt: Date.now() },
   })
 }

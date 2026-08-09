@@ -373,6 +373,37 @@ button {
   margin-top: 4px;
 }
 
+.text-btn {
+  appearance: none;
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 10px 4px 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.text-btn:hover {
+  color: #8fb4ff;
+}
+
+.text-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.map-link {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.map-link:hover {
+  text-decoration: underline;
+}
+
 .info-grid {
   display: grid;
   gap: 12px;
