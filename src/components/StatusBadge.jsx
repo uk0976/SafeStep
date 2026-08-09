@@ -3,6 +3,7 @@ const LABELS = {
   safe: 'Arrived safely',
   overdue: 'Overdue',
   sos: 'SOS triggered',
+  concern: 'Check-in flagged',
 }
 
 export default function StatusBadge({ status }) {

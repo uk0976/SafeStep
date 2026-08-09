@@ -6,11 +6,15 @@ import {
   markSafe,
   markSOS,
   markOverdue,
+  markConcern,
   extendEta,
 } from '../lib/journeys'
 import { sendAlertEmail } from '../lib/alerts'
 import { captureLocation, mapUrl } from '../lib/location'
+import { analyzeCheckIn } from '../lib/ai'
 import StatusBadge from '../components/StatusBadge'
+import CountdownRing from '../components/CountdownRing'
+import ShareQr from '../components/ShareQr'
 
 function toDate(ts) {
   if (!ts) return null
@@ -29,12 +33,23 @@ function formatTime(date) {
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
+function formatRelative(date, now) {
+  if (!date) return '—'
+  const diffSec = Math.floor((now - date.getTime()) / 1000)
+  if (diffSec < 10) return 'just now'
+  if (diffSec < 60) return `${diffSec}s ago`
+  const diffMin = Math.floor(diffSec / 60)
+  if (diffMin < 60) return `${diffMin} min ago`
+  return formatTime(date)
+}
+
 export default function TrackJourney() {
   const { id } = useParams()
   const [journey, setJourney] = useState(undefined) // undefined = loading, null = not found
   const [now, setNow] = useState(Date.now())
   const [actionPending, setActionPending] = useState(false)
   const [shareState, setShareState] = useState('idle') // idle | copied
+  const [checkInNote, setCheckInNote] = useState('')
   const overdueAlertSent = useRef(false)
 
   useEffect(() => {
@@ -61,7 +76,7 @@ export default function TrackJourney() {
   // Client-side auto-overdue: if the countdown expires while still "on the way",
   // flip status and fire the alert exactly once.
   useEffect(() => {
-    if (!journey || journey.status !== 'on_the_way') return
+    if (!journey || (journey.status !== 'on_the_way' && journey.status !== 'concern')) return
     if (remainingMs === null || remainingMs > 0) return
     if (overdueAlertSent.current) return
 
@@ -74,7 +89,17 @@ export default function TrackJourney() {
     setActionPending(true)
     try {
       const location = await captureLocation()
+      const note = checkInNote.trim()
       await checkIn(id, location)
+
+      if (note) {
+        const analysis = await analyzeCheckIn(note)
+        if (analysis.concern && (analysis.severity === 'medium' || analysis.severity === 'high')) {
+          await markConcern(id, analysis.reason)
+          if (journey) await sendAlertEmail(journey, `check-in flagged: ${analysis.reason}`)
+        }
+      }
+      setCheckInNote('')
     } finally {
       setActionPending(false)
     }
@@ -156,7 +181,7 @@ export default function TrackJourney() {
   }
 
   const lastCheckIn = toDate(journey.lastCheckIn)
-  const isActive = journey.status === 'on_the_way'
+  const isActive = journey.status === 'on_the_way' || journey.status === 'concern'
 
   return (
     <div className="page">
@@ -177,9 +202,14 @@ export default function TrackJourney() {
 
           {isActive && remainingMs !== null && (
             <div className="countdown">
-              <div className="countdown-value">
-                {remainingMs > 0 ? formatCountdown(remainingMs) : '0:00'}
-              </div>
+              <CountdownRing
+                progress={remainingMs / (journey.etaMinutes * 60000)}
+                urgent={remainingMs <= journey.etaMinutes * 60000 * 0.2}
+              >
+                <div className="countdown-value">
+                  {remainingMs > 0 ? formatCountdown(remainingMs) : '0:00'}
+                </div>
+              </CountdownRing>
               <div className="countdown-label">
                 {remainingMs > 0 ? 'Expected to arrive in' : 'Expected arrival time passed'}
               </div>
@@ -196,7 +226,7 @@ export default function TrackJourney() {
             </div>
             <div className="info-row">
               <span className="label">Last check-in</span>
-              <span className="value">{formatTime(lastCheckIn)}</span>
+              <span className="value">{formatRelative(lastCheckIn, now)}</span>
             </div>
             <div className="info-row">
               <span className="label">Started at</span>
@@ -218,7 +248,9 @@ export default function TrackJourney() {
           </div>
 
           {journey.status === 'safe' && (
-            <div className="status-banner safe">✓ {journey.name} has arrived safely.</div>
+            <div className="status-banner safe">
+              <span className="check-icon">✓</span> {journey.name} has arrived safely.
+            </div>
           )}
           {journey.status === 'overdue' && (
             <div className="status-banner overdue">
@@ -232,9 +264,23 @@ export default function TrackJourney() {
               immediately.
             </div>
           )}
+          {journey.status === 'concern' && (
+            <div className="status-banner concern">
+              ⚠ A check-in note from {journey.name} was flagged: "{journey.concernReason}".{' '}
+              {journey.contactName} has been notified.
+            </div>
+          )}
 
           {isActive && (
             <div className="action-row">
+              <input
+                type="text"
+                className="checkin-note"
+                placeholder="Optional: how are you doing? (e.g. 'all good, almost there')"
+                value={checkInNote}
+                onChange={(e) => setCheckInNote(e.target.value)}
+                disabled={actionPending}
+              />
               <button className="btn btn-ghost" onClick={handleCheckIn} disabled={actionPending}>
                 Check In
               </button>
@@ -247,7 +293,9 @@ export default function TrackJourney() {
             </div>
           )}
 
-          <div className="action-row">
+          <div className="share-section">
+            <ShareQr value={typeof window !== 'undefined' ? window.location.href : ''} />
+            <p className="qr-hint">Scan to open this tracking link on another device</p>
             <button className="btn btn-ghost" onClick={handleShare}>
               {shareState === 'copied' ? '✓ Link copied' : '🔗 Share Tracking Link'}
             </button>

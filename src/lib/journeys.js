@@ -52,6 +52,16 @@ export async function checkIn(id, location) {
   })
 }
 
+// Flags a check-in as concerning (per the AI note analysis) without ending
+// the journey — the traveler can still check in again or mark themselves safe.
+export async function markConcern(id, reason) {
+  await updateDoc(doc(db, COLLECTION, id), {
+    status: 'concern',
+    concernReason: reason ?? '',
+    lastCheckIn: serverTimestamp(),
+  })
+}
+
 export async function markSafe(id) {
   await updateDoc(doc(db, COLLECTION, id), { status: 'safe' })
 }

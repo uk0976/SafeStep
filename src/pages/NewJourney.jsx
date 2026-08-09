@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { createJourney } from '../lib/journeys'
 import { captureLocation } from '../lib/location'
+import { getSafetyTips } from '../lib/ai'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -16,10 +17,32 @@ export default function NewJourney() {
   })
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [tips, setTips] = useState([])
+  const [tipsLoading, setTipsLoading] = useState(false)
 
   function update(key) {
     return (e) => setForm((f) => ({ ...f, [key]: e.target.value }))
   }
+
+  // Debounced AI safety tips — fires ~800ms after the user stops typing a
+  // destination of reasonable length, never blocks the form otherwise.
+  useEffect(() => {
+    const destination = form.destination.trim()
+    if (destination.length < 4) {
+      setTips([])
+      return
+    }
+    setTipsLoading(true)
+    const timer = setTimeout(async () => {
+      const result = await getSafetyTips(destination)
+      setTips(result)
+      setTipsLoading(false)
+    }, 800)
+    return () => {
+      clearTimeout(timer)
+      setTipsLoading(false)
+    }
+  }, [form.destination])
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -95,6 +118,17 @@ export default function NewJourney() {
                 value={form.destination}
                 onChange={update('destination')}
               />
+              {tipsLoading && <div className="tips-loading">Getting safety tips…</div>}
+              {!tipsLoading && tips.length > 0 && (
+                <div className="tips-box">
+                  <span className="tips-label">✨ Safety tips for this route</span>
+                  <ul>
+                    {tips.map((tip, i) => (
+                      <li key={i}>{tip}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
 
             <div className="field">
