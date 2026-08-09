@@ -1,7 +1,7 @@
 # 🛡️ SafeStep
 
-**[Live app: PLACEHOLDER_DEPLOYED_URL](PLACEHOLDER_DEPLOYED_URL)**
-**[See it in action (sample journey, no signup needed): PLACEHOLDER_DEPLOYED_URL/track/demo-journey](PLACEHOLDER_DEPLOYED_URL/track/demo-journey)**
+**[Live app](https://safe-step-weld.vercel.app/)**
+**[See it in action — sample journey, no signup needed](https://safe-step-weld.vercel.app/track/demo-journey)**
 
 ## The problem
 
